@@ -177,3 +177,42 @@ body {
 .fixed.top-\[72px\].z-\[95\] {
   top: 10px !important;
 }
+
+/* ── Touch screens ─────────────────────────────────────────────── */
+/* A finger can't hover. Small controls that wait for a hover (a list's ×,
+   a table's + edges) show faintly instead; the keys above each plate still
+   wait for the plate to be tapped, so a board of plates stays calm.      */
+@media (hover: none) {
+  .opacity-0[class*="group-hover"]:not([data-nodrag]):not([data-resize] *) {
+    opacity: 0.7;
+  }
+}
+@media (pointer: coarse) {
+  /* corners and edges big enough for a fingertip */
+  [data-resize][data-corner="nw"],
+  [data-resize][data-corner="ne"],
+  [data-resize][data-corner="sw"],
+  [data-resize][data-corner="se"] {
+    width: 36px !important;
+    height: 36px !important;
+    margin: -8px;
+  }
+  [data-resize][data-corner="n"],
+  [data-resize][data-corner="s"] {
+    height: 22px !important;
+  }
+  [data-resize][data-corner="w"],
+  [data-resize][data-corner="e"] {
+    width: 22px !important;
+  }
+  [data-note-resize],
+  [data-shape-resize] {
+    transform: scale(1.8);
+  }
+}
+/* the board takes every touch; a part of a widget that really has more to
+   scroll gives it back (the board marks those as they overflow)         */
+[data-scrollable][data-overflows] {
+  touch-action: pan-x pan-y;
+  overscroll-behavior: contain;
+}

@@ -51,6 +51,7 @@ import { LINE_HEIGHT, NOTE_SIZES } from "@/lib/notes";
 import { PdfImport } from "./PdfImport";
 import { Search } from "./Search";
 import { Minimap } from "./Minimap";
+import { ChromeLayer } from "./ChromeLayer";
 import { Toolbar } from "./Toolbar";
 import { Header, HelpSheet, ZoomControls, modKey } from "./Chrome";
 import {
@@ -212,6 +213,7 @@ export function Board() {
   const gesture = useRef<Gesture | null>(null);
   const touches = useRef(new Map<number, Vec>());
   const spaceRef = useRef(false);
+  const penSeen = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const ctxAt = useRef<{ world: Vec; target: string | null }>({ world: [0, 0], target: null });
 
@@ -229,6 +231,22 @@ export function Board() {
   const [dropping, setDropping] = useState(false);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const mediaRef = useRef<HTMLInputElement>(null);
+
+  // which scrollable parts actually overflow, so only those take a finger's swipe as a scroll
+  useEffect(() => {
+    const mark = () =>
+      document.querySelectorAll<HTMLElement>("[data-item] [data-scrollable]").forEach((el) => {
+        const over = el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1;
+        if (over !== el.hasAttribute("data-overflows")) el.toggleAttribute("data-overflows", over);
+      });
+    mark();
+    const t = setInterval(mark, 1200);
+    window.addEventListener("resize", mark);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("resize", mark);
+    };
+  }, [doc]);
 
   // the + tray's "picture or pdf" row asks for a file through this
   useEffect(() => {
@@ -343,7 +361,13 @@ export function Board() {
 
     if (e.pointerType === "touch") {
       touches.current.set(e.pointerId, [sx, sy]);
-      if (touches.current.size === 2 && (!gesture.current || gesture.current.type === "pan" || gesture.current.type === "marquee")) {
+      if (touches.current.size === 2) {
+        // a second finger means a pinch, even if the first had started moving a plate
+        const g0 = gesture.current;
+        if (g0 && g0.type !== "pan" && g0.type !== "marquee" && g0.type !== "pinch") {
+          cancelGesture();
+          document.querySelectorAll("[data-lifted]").forEach((el) => el.removeAttribute("data-lifted"));
+        }
         const [a, b] = [...touches.current.values()];
         gesture.current = {
           type: "pinch",
@@ -364,6 +388,13 @@ export function Board() {
     }
     if (e.button !== 0) return;
 
+    if (e.pointerType === "pen") penSeen.current = true;
+    if (t.closest("[data-capture]") && e.pointerType === "touch" && penSeen.current && s.tool !== "text") {
+      // a pencil has been used: a finger (or a palm) moves the board instead of drawing
+      e.preventDefault();
+      startPan(sx, sy);
+      return;
+    }
     if (t.closest("[data-capture]")) {
       e.preventDefault();
       if (s.tool === "pen") {
@@ -478,6 +509,8 @@ export function Board() {
       bringToFront(itemId);
       // controls keep the press; anything else on the plate is something to hold it by
       if (t.closest(GRABLESS) || window.getSelection()?.toString()) return;
+      // on a touch screen, a finger on a part that scrolls scrolls it
+      if (e.pointerType === "touch" && scrollsInside(t)) return;
       e.preventDefault();
       (document.activeElement as HTMLElement | null)?.blur?.();
       beginGesture();
@@ -807,6 +840,9 @@ export function Board() {
     const onWheel = (e: WheelEvent) => {
       const t = e.target as HTMLElement;
       const zoom = e.ctrlKey || e.metaKey;
+      // the browser has zoomed the page (a pinch over a video): pinching out must reach it, or there'd be no way back
+      const pageZoomed = (window.visualViewport?.scale ?? 1) > 1.01;
+      if (zoom && pageZoomed && e.deltaY > 0) return;
       if (!zoom) {
         if (!root.contains(t) || scrollsInside(t)) return;
         if (t.closest("[role='dialog'], [role='listbox'], [role='menu']")) return;
@@ -830,11 +866,16 @@ export function Board() {
     // Safari reports trackpad pinches as gestures rather than ctrl-wheel
     let gz = 1;
     const onGestureStart = (e: Event) => {
+      // the page is zoomed: leave the gesture to the browser so it can zoom back out
+      if ((window.visualViewport?.scale ?? 1) > 1.01) return;
       e.preventDefault();
       gz = getState().camera.z;
     };
-    const stopGesture = (e: Event) => e.preventDefault();
+    const stopGesture = (e: Event) => {
+      if ((window.visualViewport?.scale ?? 1) <= 1.01) e.preventDefault();
+    };
     const onGestureChange = (e: Event) => {
+      if ((window.visualViewport?.scale ?? 1) > 1.01) return;
       e.preventDefault();
       const ge = e as Event & { scale: number; clientX: number; clientY: number };
       setState({ camera: zoomAt(getState().camera, ge.clientX, ge.clientY, gz * ge.scale) });
@@ -1356,6 +1397,7 @@ export function Board() {
         </div>
       </ContextMenu>
 
+      <ChromeLayer>
       <Header
         onHelp={() => setHelp(true)}
         onExport={exportBoard}
@@ -1372,6 +1414,7 @@ export function Board() {
       <Toolbar />
       <ZoomControls />
       <Minimap />
+      </ChromeLayer>
 
       <input
         ref={fileRef}

@@ -1,7 +1,8 @@
 "use client";
 
 import { Skeleton } from "@blurrow/ui";
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
+import { zoomedInto } from "../board/ChromeLayer";
 import { live } from "@/lib/store";
 import { IconCopy, IconExternal, IconLink, IconPlay } from "../icons";
 import { RailKey, type WidgetProps } from "./parts";
@@ -78,6 +79,58 @@ function host(url: string) {
   }
 }
 
+/* A player is another site's page inside the card, and gestures over it go
+   to that page, not the board. So it sits behind a glass pane until you
+   press it: pinches and scrolls over the glass zoom and pan the board as
+   anywhere else. Pressed, the player takes the pointer until it leaves
+   the card. It starts playing by itself, so no press is needed to begin. */
+function Player({ id, url, title }: { id: string; url: string; title?: string }) {
+  const [live, setLive] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const start = startAt(url);
+  // the page started to zoom while this one had the pointer: it goes back behind its glass,
+  // and is remembered as what the person zoomed into
+  useEffect(() => {
+    if (!live) return;
+    const v = window.visualViewport;
+    if (!v) return;
+    const check = () => {
+      if (v.scale > 1.01) {
+        zoomedInto.el = box.current;
+        setLive(false);
+      }
+    };
+    v.addEventListener("resize", check);
+    return () => v.removeEventListener("resize", check);
+  }, [live]);
+  return (
+    <div ref={box} className="absolute inset-0" onPointerLeave={() => setLive(false)} style={{ background: "#000" }}>
+      <iframe
+        title={title || "youtube video"}
+        src={`https://www.youtube-nocookie.com/embed/${id}?rel=0&autoplay=1&playsinline=1${start ? `&start=${start}` : ""}`}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowFullScreen
+        referrerPolicy="strict-origin-when-cross-origin"
+        className="absolute inset-0 h-full w-full border-0"
+        style={{ pointerEvents: live ? "auto" : "none" }}
+      />
+      {!live && (
+        <button
+          type="button"
+          aria-label="use the player"
+          title="press to use the player"
+          onClick={() => setLive(true)}
+          className="group/glass absolute inset-0 cursor-pointer"
+        >
+          <span className="absolute right-2 bottom-2 rounded-[6px] bg-black/55 px-2 py-1 text-[11px] font-medium text-white opacity-0 transition-opacity group-hover/glass:opacity-100">
+            press to use the player
+          </span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 export const LinkCard = memo(function LinkCard({ id, data, set, h }: WidgetProps<LinkData>) {
   const [imgOk, setImgOk] = useState(true);
 
@@ -101,20 +154,7 @@ export const LinkCard = memo(function LinkCard({ id, data, set, h }: WidgetProps
   const showImage = data.image && imgOk && h > 200;
   const yt = youtubeId(data.url);
 
-  if (yt && data.embed) {
-    const start = startAt(data.url);
-    return (
-      <iframe
-        title={data.title || "youtube video"}
-        src={`https://www.youtube-nocookie.com/embed/${yt}?rel=0${start ? `&start=${start}` : ""}`}
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        allowFullScreen
-        referrerPolicy="strict-origin-when-cross-origin"
-        className="absolute inset-0 h-full w-full border-0"
-        style={{ background: "#000" }}
-      />
-    );
-  }
+  if (yt && data.embed) return <Player id={yt} url={data.url} title={data.title} />;
 
   return (
     <div className="flex h-full flex-col">

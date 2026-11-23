@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Note, NoteFont, PenStyle, Shape, ShapeFill, ShapeKind, Tool, WidgetKind } from "@/lib/types";
 import { NOTE_FONTS, NOTE_SIZES } from "@/lib/notes";
-import { commit, setState, useBoard } from "@/lib/store";
+import { commit, deleteIds, getState, setState, useBoard } from "@/lib/store";
 import { inkColor, swatchColor } from "@/lib/colors";
-import { addWidget, alignSelection, distributeSelection, toggleLock } from "@/lib/actions";
+import { addWidget, alignSelection, distributeSelection, duplicateSelection, toggleLock } from "@/lib/actions";
+import { useCoarse } from "./useCoarse";
 import { Tooltip } from "@blurrow/ui";
 import { WIDGETS } from "../widgets/registry";
 import {
@@ -20,7 +21,9 @@ import {
   IconFillSolid,
   IconFillTint,
   IconAlign,
+  IconCopy,
   IconDistribute,
+  IconTrash,
   IconImage,
   IconLock,
   IconUnlock,
@@ -228,7 +231,7 @@ function PenStrip() {
   return (
     <div className="animate-shelf-in absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2">
       <div
-        className="flex items-center gap-[5px] rounded-[18px] p-[5px]"
+        className="no-scrollbar flex max-w-[calc(100vw-24px)] items-center gap-[5px] overflow-x-auto rounded-[18px] p-[5px]"
         style={{ background: "var(--panel-bezel)", boxShadow: "var(--overlay-shadow)" }}
       >
         <Segmented
@@ -302,7 +305,7 @@ function TextStrip() {
     // pressing the strip never takes focus, so a note being written keeps its caret
     <div className="animate-shelf-in absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2" onMouseDown={(e) => e.preventDefault()}>
       <div
-        className="flex items-center gap-[5px] rounded-[18px] p-[5px]"
+        className="no-scrollbar flex max-w-[calc(100vw-24px)] items-center gap-[5px] overflow-x-auto rounded-[18px] p-[5px]"
         style={{ background: "var(--panel-bezel)", boxShadow: "var(--overlay-shadow)" }}
       >
         <Segmented
@@ -378,7 +381,7 @@ function ShapeStrip() {
   return (
     <div className="animate-shelf-in absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2" onMouseDown={(e) => e.preventDefault()}>
       <div
-        className="flex items-center gap-[5px] rounded-[18px] p-[5px]"
+        className="no-scrollbar flex max-w-[calc(100vw-24px)] items-center gap-[5px] overflow-x-auto rounded-[18px] p-[5px]"
         style={{ background: "var(--panel-bezel)", boxShadow: "var(--overlay-shadow)" }}
       >
         <Segmented
@@ -402,7 +405,7 @@ function ShapeStrip() {
 
 /* Two or more things selected: line them up, or space them evenly, or lock
    them. Rises above any other strip that's showing.                     */
-function ArrangeStrip({ raised }: { raised: boolean }) {
+function ArrangeStrip({ raised, touch }: { raised: boolean; touch: boolean }) {
   const count = useBoard((s) => s.selection.length);
   const allLocked = useBoard((s) => {
     const set = new Set(s.selection);
@@ -428,8 +431,16 @@ function ArrangeStrip({ raised }: { raised: boolean }) {
       style={{ bottom: raised ? "calc(100% + 70px)" : "calc(100% + 8px)" }}
       onMouseDown={(e) => e.preventDefault()}
     >
-      <div className="flex items-center gap-[5px] rounded-[18px] p-[5px]" style={{ background: "var(--panel-bezel)", boxShadow: "var(--overlay-shadow)" }}>
-        <div className="well flex items-center rounded-[13px] p-1">
+      <div className="no-scrollbar flex max-w-[calc(100vw-24px)] items-center gap-[5px] overflow-x-auto rounded-[18px] p-[5px]" style={{ background: "var(--panel-bezel)", boxShadow: "var(--overlay-shadow)" }}>
+        {touch && (
+          <div className="well flex shrink-0 items-center rounded-[13px] p-1">
+            {key("duplicate", () => duplicateSelection(), <IconCopy size={15} />)}
+            {key("take off the board", () => deleteUnlocked(), <IconTrash size={15} />)}
+          </div>
+        )}
+        {count >= 2 && (
+        <>
+        <div className="well flex shrink-0 items-center rounded-[13px] p-1">
           {key("align left edges", () => alignSelection("left"), <IconAlign dir="left" />)}
           {key("align centres", () => alignSelection("center"), <IconAlign dir="center" />)}
           {key("align right edges", () => alignSelection("right"), <IconAlign dir="right" />)}
@@ -438,11 +449,13 @@ function ArrangeStrip({ raised }: { raised: boolean }) {
           {key("align middles", () => alignSelection("middle"), <IconAlign dir="middle" />)}
           {key("align bottom edges", () => alignSelection("bottom"), <IconAlign dir="bottom" />)}
         </div>
-        <div className="well flex items-center rounded-[13px] p-1">
+        <div className="well flex shrink-0 items-center rounded-[13px] p-1">
           {key("space evenly across", () => distributeSelection("x"), <IconDistribute axis="x" />, count < 3)}
           {key("space evenly down", () => distributeSelection("y"), <IconDistribute axis="y" />, count < 3)}
         </div>
-        <div className="well flex items-center rounded-[13px] p-1">
+        </>
+        )}
+        <div className="well flex shrink-0 items-center rounded-[13px] p-1">
           {key(allLocked ? "unlock them" : "lock them in place", () => toggleLock(), allLocked ? <IconLock size={15} /> : <IconUnlock size={15} />)}
         </div>
       </div>
@@ -450,14 +463,25 @@ function ArrangeStrip({ raised }: { raised: boolean }) {
   );
 }
 
+/** delete what's selected, leaving anything locked where it is */
+function deleteUnlocked() {
+  const { doc, selection } = getState();
+  const locked = new Set([...doc.items.filter((i) => i.locked), ...doc.marks.filter((m) => m.locked)].map((x) => x.id));
+  deleteIds(selection.filter((id) => !locked.has(id)));
+}
+
 export function Toolbar() {
   const tool = useBoard((s) => s.tool);
+  const touch = useCoarse();
   const selection = useBoard((s) => s.selection);
   const marks = useBoard((s) => s.doc.marks);
   const notesSelected = selection.length > 0 && marks.some((m) => m.kind === "text" && selection.includes(m.id));
   const shapesSelected = selection.length > 0 && marks.some((m) => m.kind === "shape" && selection.includes(m.id));
   return (
-    <div className="animate-header-in pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-4 sm:bottom-5">
+    <div
+      className="animate-header-in pointer-events-none fixed inset-x-0 z-40 flex justify-center px-3 sm:px-4"
+      style={{ bottom: "max(16px, calc(env(safe-area-inset-bottom) + 8px))" }}
+    >
       <div
         className="pointer-events-auto relative rounded-[18px] p-[5px]"
         style={{ background: "var(--panel-bezel)", boxShadow: "var(--overlay-shadow)" }}
@@ -465,7 +489,9 @@ export function Toolbar() {
         {tool === "pen" && <PenStrip />}
         {(tool === "text" || (tool === "select" && notesSelected)) && <TextStrip />}
         {(tool === "shape" || (tool === "select" && shapesSelected && !notesSelected)) && <ShapeStrip />}
-        {tool === "select" && selection.length >= 2 && <ArrangeStrip raised={notesSelected || shapesSelected} />}
+        {tool === "select" && (selection.length >= 2 || (touch && selection.length >= 1)) && (
+          <ArrangeStrip raised={notesSelected || shapesSelected} touch={touch} />
+        )}
         {/* one channel: the tools, a groove, then the colour and the tray */}
         <Segmented
           ariaLabel="tools"

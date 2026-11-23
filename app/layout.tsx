@@ -17,6 +17,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  // draw under the notch and home indicator; the bars keep clear of them with safe-area insets
+  viewportFit: "cover",
 };
 
 /* Set the theme before first paint so a dark board never flashes light. */

@@ -3,9 +3,10 @@
 import { Button, Input, Kbd, Modal, Tabs } from "@blurrow/ui";
 import { Flyout, FlyLabel, FlyRow, FlySep } from "./Flyout";
 import { useMinimapOn } from "./Minimap";
+import { useCoarse } from "./useCoarse";
 import { TEMPLATES } from "@/lib/templates";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { addBoard, duplicateBoard, getState, moveBoard, renameBoard, switchBoard, useBoard } from "@/lib/store";
+import { addBoard, duplicateBoard, getState, moveBoard, redo, renameBoard, switchBoard, undo, useBoard } from "@/lib/store";
 import { exportPng, fitAll, resetZoom } from "@/lib/actions";
 import {
   IconDownload,
@@ -18,6 +19,8 @@ import {
   IconUpload,
   IconImage,
   IconMap,
+  IconUndo,
+  IconRedo,
   IconX,
   IconCopy,
   IconArrowLeft,
@@ -286,6 +289,7 @@ export function Header({
   const active = useBoard((s) => s.activeBoard);
   const saveState = useBoard((s) => s.saveState);
   const [renaming, setRenaming] = useState<string | null>(null);
+  const touch = useCoarse();
   const [menu, setMenu] = useState(false);
   const [mapOn, setMap] = useMinimapOn();
   const close = useCallback(() => setMenu(false), []);
@@ -304,7 +308,14 @@ export function Header({
 
   return (
     <>
-      <header className="animate-header-in pointer-events-none fixed top-4 right-4 left-4 z-40 flex">
+      <header
+        className="animate-header-in pointer-events-none fixed z-40 flex gap-2"
+        style={{
+          top: "max(16px, env(safe-area-inset-top))",
+          left: "max(16px, env(safe-area-inset-left))",
+          right: "max(16px, env(safe-area-inset-right))",
+        }}
+      >
         <div
           className="pointer-events-auto flex min-w-0 max-w-full items-center gap-1 rounded-[16px] p-[5px]"
           style={{ background: "var(--panel-bezel)", boxShadow: "var(--overlay-shadow)" }}
@@ -390,6 +401,20 @@ export function Header({
           <span aria-hidden className="mx-1 h-5 w-px shrink-0" style={{ background: "var(--divider)" }} />
           <BoardTabs onRename={setRenaming} onMenu={(id, at) => setTabMenu({ id, at })} />
         </div>
+        {touch && (
+          // no keyboard on a phone: undo and redo get keys of their own
+          <div
+            className="pointer-events-auto ml-auto flex shrink-0 items-center gap-0.5 rounded-[16px] p-[5px]"
+            style={{ background: "var(--panel-bezel)", boxShadow: "var(--overlay-shadow)" }}
+          >
+            <button type="button" aria-label="undo" onClick={undo} className="grid h-9 w-9 place-items-center rounded-[10px] text-ink-label active:bg-surface-active cursor-pointer">
+              <IconUndo size={17} />
+            </button>
+            <button type="button" aria-label="redo" onClick={redo} className="grid h-9 w-9 place-items-center rounded-[10px] text-ink-label active:bg-surface-active cursor-pointer">
+              <IconRedo size={17} />
+            </button>
+          </div>
+        )}
       </header>
       <RenameBoard id={renaming} onDone={() => setRenaming(null)} />
       {tabMenu &&
