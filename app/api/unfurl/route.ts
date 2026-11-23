@@ -70,10 +70,45 @@ function meta(html: string, keys: string[]) {
   return undefined;
 }
 
+/* YouTube hands automated visitors a stripped page (often a consent screen)
+   with no preview tags, so its own oEmbed endpoint answers instead.       */
+function youtubeId(u: URL): string | null {
+  const host = u.hostname.replace(/^(www|m|music)\./, "");
+  if (host === "youtu.be") return u.pathname.slice(1).split("/")[0] || null;
+  if (host === "youtube.com" || host === "youtube-nocookie.com") {
+    if (u.pathname === "/watch") return u.searchParams.get("v");
+    const m = /^\/(?:embed|shorts|live|v)\/([\w-]{6,})/.exec(u.pathname);
+    return m ? m[1] : null;
+  }
+  return null;
+}
+
+async function youtube(u: URL, id: string) {
+  const r = await fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}`, {
+    signal: AbortSignal.timeout(6000),
+  });
+  if (!r.ok) return null;
+  const j = (await r.json()) as { title?: string; author_name?: string };
+  return {
+    url: u.toString(),
+    title: j.title,
+    description: j.author_name ? `a video by ${j.author_name}` : undefined,
+    image: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+    site: "youtube",
+    icon: "https://www.youtube.com/favicon.ico",
+  };
+}
+
 export async function GET(req: Request) {
   const target = new URL(req.url).searchParams.get("url") ?? "";
   let url = await safeUrl(target);
   if (!url) return Response.json({ error: "that address can't be previewed" }, { status: 400 });
+
+  const yt = youtubeId(url);
+  if (yt) {
+    const card = await youtube(url, yt).catch(() => null);
+    if (card) return Response.json(card, { headers: { "cache-control": "public, max-age=86400" } });
+  }
 
   try {
     let res: Response | null = null;

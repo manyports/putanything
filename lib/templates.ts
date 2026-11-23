@@ -209,8 +209,11 @@ export function tutorialDoc(): Doc {
   // 3 · paste
   {
     const { ox, oy } = step(2, "paste anything");
-    put("link", ox, oy, { url: "https://en.wikipedia.org/wiki/Post-it_Note", state: "loading" }, { w: 380, h: 300 });
-    marks.push(note(ox, oy + 320, `copy a link, press ${mod}v on the board → a card!\npictures, pdfs and spreadsheet cells work too.`, 22));
+    // a youtube link, pasted: a card with its picture, and a key that plays it right here
+    put("link", ox, oy, { url: "https://www.youtube.com/watch?v=_ZAgIHmHLdc", state: "loading" }, { w: 380, h: 300 });
+    marks.push(arrow([ox + 470, oy + 360], [ox + 372, oy + 286], { tone: "accent" }));
+    marks.push(note(ox + 392, oy + 366, "press play here :)", 24, { tone: "accent" }));
+    marks.push(note(ox, oy + 330, `copy a link, press ${mod}v on the board → a card!\nyoutube plays right in it. pictures, pdfs and\nspreadsheet cells work too.`, 22));
   }
   // 4 · draw
   {
