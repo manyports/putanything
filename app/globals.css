@@ -1,26 +1,179 @@
 @import "tailwindcss";
+@import "@blurrow/ui/styles.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* let tailwind see the classes @blurrow/ui uses */
+@source "../node_modules/@blurrow/ui";
+
+@theme {
+  --font-hand: var(--font-caveat), "Comic Sans MS", cursive;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Paper for stickies. Colour here is the reader's own filing system, so
+   the tints stay pale and each has a darker material for the dark theme. */
+:root,
+[data-theme="light"] {
+  --paper-plain: var(--panel-face);
+  --paper-amber: #fbf1d3;
+  --paper-mint: #e3f2e9;
+  --paper-lilac: #ece7fa;
+  --paper-rose: #f8e6e4;
+  --paper-ink: oklch(30% 0 0);
+  --stroke-ink: var(--ink);
+  --selection: var(--accent-soft);
+}
+
+[data-theme="dark"] {
+  --paper-amber: #36301f;
+  --paper-mint: #1e2f26;
+  --paper-lilac: #2a253b;
+  --paper-rose: #352322;
+  --paper-ink: oklch(90% 0 0);
+  --stroke-ink: oklch(86% 0 0);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  [data-theme="system"] {
+    --paper-amber: #36301f;
+    --paper-mint: #1e2f26;
+    --paper-lilac: #2a253b;
+    --paper-rose: #352322;
+    --paper-ink: oklch(90% 0 0);
+    --stroke-ink: oklch(86% 0 0);
   }
 }
 
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--page);
+  color: var(--ink);
+}
+
+/* The board's only texture: the dot grid every figure stage uses. */
+.board-dots {
+  background-color: var(--page);
+  background-image: radial-gradient(circle at center, var(--dots) 1.1px, transparent 1.3px);
+}
+
+/* A plate on the board: bezel, rail, face. */
+.plate {
+  background: var(--panel-bezel);
+  box-shadow: var(--panel-shadow);
+  transition: box-shadow 220ms var(--ease-out-soft);
+}
+.plate {
+  cursor: grab;
+}
+.plate[data-lifted="true"] {
+  cursor: grabbing;
+  box-shadow: var(--overlay-shadow);
+}
+.plate-face {
+  background: var(--panel-face);
+  box-shadow: var(--panel-face-shadow);
+}
+
+.well {
+  background: var(--well);
+  box-shadow: var(--well-shadow);
+}
+
+.raised-key {
+  background: var(--face);
+  box-shadow: var(--face-shadow);
+  text-shadow: var(--emboss);
+  transition:
+    box-shadow 150ms var(--ease-out-soft),
+    transform 150ms var(--ease-out-soft);
+}
+.raised-key:hover {
+  box-shadow: var(--face-shadow-hover);
+}
+.raised-key:active,
+.raised-key[aria-pressed="true"] {
+  box-shadow: var(--face-pressed);
+  transform: translateY(0.5px);
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes header-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-header-in {
+  animation: header-in 360ms var(--ease-out-soft) both;
+}
+
+@keyframes plate-drop {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-plate-drop {
+  animation: plate-drop 300ms var(--ease-spring) both;
+}
+
+@keyframes shelf-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-shelf-in {
+  animation: shelf-in 240ms var(--ease-spring) both;
+  transform-origin: bottom center;
+}
+
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-drop-in {
+  animation: drop-in 240ms var(--ease-spring) both;
+}
+
+/* A groove cut into a well: the one divider the bars use. */
+.groove-v {
+  width: 1px;
+  align-self: stretch;
+  margin: 6px 3px;
+  background: var(--groove);
+  box-shadow: var(--groove-lip);
+}
+
+/* The kit's toasts hang 72px down, in the middle of the board. Here they
+   tuck up against the top edge, where they're seen without being in the way. */
+.fixed.top-\[72px\].z-\[95\] {
+  top: 10px !important;
 }

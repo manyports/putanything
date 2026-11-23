@@ -1,5 +1,5 @@
 {
-  "name": "app-tmp",
+  "name": "putanything",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,7 +9,11 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@blurrow/ui": "^0.3.0",
+    "html-to-image": "^1.11.11",
     "next": "16.4.6",
+    "pdfjs-dist": "^4.10.38",
+    "perfect-freehand": "^1.2.2",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
