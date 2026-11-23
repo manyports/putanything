@@ -8,4 +8,6 @@ export const SITE = {
   contact: "",
   /** the day these pages last changed */
   updated: "2026-11-23",
+  /** bumped whenever the terms or privacy policy change, so everyone is asked to agree again */
+  version: 2,
 };

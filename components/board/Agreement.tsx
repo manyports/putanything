@@ -8,6 +8,8 @@ import { SITE } from "@/lib/site";
    privacy policy have been agreed to on this device. The answer is kept
    with the date of the pages it agreed to, so a later change asks again. */
 const KEY = "putanything:agreed";
+// what was agreed to: the pages' date and version together
+const AGREED = `${SITE.updated}#${SITE.version}`;
 const listeners = new Set<() => void>();
 
 function read(): string | null {
@@ -24,14 +26,14 @@ function useAgreed() {
       listeners.add(l);
       return () => listeners.delete(l);
     },
-    () => read() === SITE.updated,
+    () => read() === AGREED,
     () => null,
   );
 }
 
 function agree() {
   try {
-    localStorage.setItem(KEY, SITE.updated);
+    localStorage.setItem(KEY, AGREED);
   } catch {}
   listeners.forEach((l) => l());
 }

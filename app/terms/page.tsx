@@ -44,6 +44,10 @@ export default function TermsPage() {
           <a href="https://frankfurter.dev" rel="noreferrer">frankfurter.dev</a> and are published once each working day.
         </p>
         <p>
+          youtube videos that play in a card are youtube&apos;s, shown through youtube&apos;s own player and under its
+          terms. link cards show what each page says about itself; that content belongs to its owners.
+        </p>
+        <p>
           any of these can be late, missing or wrong. don&apos;t rely on the forecast for anything safety-related, or on
           the rates for a trade. unit conversions are worked out in your browser and rounded for display.
         </p>
