@@ -23,13 +23,15 @@ const HANDLES: { corner: string; cursor: string; className: string }[] = [
 interface Props {
   item: Item;
   selected: boolean;
+  /** selected along with other things: the shared frame does the scaling, so this plate keeps quiet */
+  together?: boolean;
   onClose: (id: string) => void;
 }
 
 /* A plate is one object: a bezel holding a face. You pick it up by any
    part that isn't a control, the way you'd pick up a thing on a desk.
    Its keys only come out when you're pointing at it or it's selected. */
-export const WidgetFrame = memo(function WidgetFrame({ item, selected, onClose }: Props) {
+export const WidgetFrame = memo(function WidgetFrame({ item, selected, together, onClose }: Props) {
   const def = WIDGETS[item.kind];
   const set = useCallback(
     (patch: Record<string, unknown>, opts?: { history?: boolean; key?: string }) =>
@@ -41,7 +43,7 @@ export const WidgetFrame = memo(function WidgetFrame({ item, selected, onClose }
   return (
     <div
       data-item={item.id}
-      data-selected={selected || undefined}
+      data-selected={(selected && !together) || undefined}
       data-locked={item.locked || undefined}
       className="plate group/plate flex flex-col rounded-none p-[5px]"
       style={{
@@ -95,7 +97,7 @@ export const WidgetFrame = memo(function WidgetFrame({ item, selected, onClose }
         <Component id={item.id} data={item.data} set={set} w={item.w} h={item.h} />
       </div>
 
-      {!item.locked && HANDLES.map((h) => (
+      {!item.locked && !(selected && together) && HANDLES.map((h) => (
         <div key={h.corner} data-resize={item.id} data-corner={h.corner} aria-hidden className={h.className} style={{ cursor: h.cursor }}>
           {h.corner.length === 2 && (
             <span

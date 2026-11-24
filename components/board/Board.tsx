@@ -1,7 +1,7 @@
 "use client";
 
 import { CommandPalette, ContextMenu, Modal, Button, useToast } from "@blurrow/ui";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Arrow, Doc, Item, Mark, Note, Rect, Shape, Stroke, Tool, Vec, WidgetKind } from "@/lib/types";
 import {
   beginGesture,
@@ -28,6 +28,10 @@ import {
   cloneLive,
   exportPng,
   toggleLock,
+  withGroups,
+  isOneGroup,
+  groupSelection,
+  ungroupSelection,
   duplicateSelection,
   zoomToSelection,
   exportBoard,
@@ -70,6 +74,8 @@ import {
   IconText,
   IconTrash,
   IconUpload,
+  IconGroup,
+  IconUngroup,
 } from "../icons";
 
 type Gesture =
@@ -90,6 +96,8 @@ type Gesture =
   | { type: "shape"; id: string; start: Vec }
   | { type: "shapeSize"; id: string; corner: string; r0: Rect; start: Vec; moved: boolean }
   | { type: "noteScale"; id: string; corner: string; r0: Rect; size0: number; width0?: number; start: Vec; moved: boolean }
+  | { type: "scaleSel"; corner: string; r0: Rect; kMin: number; items0: Item[]; marks0: Mark[]; start: Vec; moved: boolean }
+  | { type: "arrowEnd"; id: string; end: "a" | "b"; moved: boolean }
   | { type: "pen"; id: string }
   | { type: "arrow"; id: string; start: Vec }
   | { type: "erase"; hit: boolean };
@@ -198,6 +206,36 @@ function scaleNote(n: Note, corner: string, r0: Rect, size0: number, dx: number,
   };
 }
 
+/* Everything selected, scaled by k about a fixed point: plates, drawings,
+   arrows, words and shapes alike, so a layout keeps its shape at any size.
+   A picture's face keeps its proportions; its 10px bezel doesn't scale. */
+function scaleParts(items0: Item[], marks0: Mark[], o: Vec, k: number) {
+  const P = (x: number, y: number): Vec => [o[0] + (x - o[0]) * k, o[1] + (y - o[1]) * k];
+  const items = items0.map((i) => {
+    const [x, y] = P(i.x, i.y);
+    const w = i.w * k;
+    const h = WIDGETS[i.kind].keepAspect ? ((w - 10) * (i.h - 10)) / (i.w - 10) + 10 : i.h * k;
+    return { ...i, x, y, w, h };
+  });
+  const marks = marks0.map((m): Mark => {
+    switch (m.kind) {
+      case "stroke":
+        return { ...m, size: m.size * k, pts: m.pts.map(([x, y, pr]) => [...P(x, y), pr] as [number, number, number]) };
+      case "arrow":
+        return { ...m, a: P(...m.a), b: P(...m.b) };
+      case "text": {
+        const [x, y] = P(m.x, m.y);
+        return { ...m, x, y, size: m.size * k, width: m.width ? m.width * k : undefined };
+      }
+      case "shape": {
+        const [x, y] = P(m.x, m.y);
+        return { ...m, x, y, w: m.w * k, h: m.h * k };
+      }
+    }
+  });
+  return { items, marks };
+}
+
 function snapAngle(a: Vec, b: Vec): Vec {
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
@@ -206,6 +244,56 @@ function snapAngle(a: Vec, b: Vec): Vec {
   const ang = Math.round(Math.atan2(dy, dx) / step) * step;
   return [a[0] + Math.cos(ang) * len, a[1] + Math.sin(ang) * len];
 }
+
+/* Two or more things selected: a frame round all of them. Its corners
+   scale everything inside together, the opposite corner holding still. */
+const SelectionFrame = memo(function SelectionFrame({ doc, selection, zoom, hidden }: { doc: Doc; selection: string[]; zoom: number; hidden: boolean }) {
+  if (selection.length < 2 || hidden) return null;
+  const set = new Set(selection);
+  const parts = [...doc.items.filter((i) => set.has(i.id)), ...doc.marks.filter((m) => set.has(m.id))];
+  if (parts.length < 2) return null;
+  const r = union([...doc.items.filter((i) => set.has(i.id)).map(itemRect), ...doc.marks.filter((m) => set.has(m.id)).map(markRect)]);
+  if (!r) return null;
+  const locked = parts.some((x) => x.locked);
+  const grouped = isOneGroup(doc, selection);
+  const p = 10 / zoom;
+  const g = 11 / zoom;
+  const corners: [string, number, number, string][] = [
+    ["nw", r.x - p, r.y - p, "nwse-resize"],
+    ["ne", r.x + r.w + p, r.y - p, "nesw-resize"],
+    ["sw", r.x - p, r.y + r.h + p, "nesw-resize"],
+    ["se", r.x + r.w + p, r.y + r.h + p, "nwse-resize"],
+  ];
+  return (
+    <>
+      <div
+        aria-hidden
+        data-selection-frame
+        className="pointer-events-none absolute"
+        style={{
+          left: r.x - p,
+          top: r.y - p,
+          width: r.w + p * 2,
+          height: r.h + p * 2,
+          outline: `${(grouped ? 1.5 : 1) / zoom}px ${grouped ? "solid" : "dashed"} var(--selection)`,
+        }}
+      />
+      {!locked &&
+        corners.map(([c, x, y, cursor]) => (
+          <div
+            key={c}
+            data-sel-scale
+            data-corner={c}
+            title="drag to scale them all"
+            className="absolute z-20 grid place-items-center"
+            style={{ left: x - g, top: y - g, width: g * 2, height: g * 2, cursor }}
+          >
+            <span className="block" style={{ width: 10 / zoom, height: 10 / zoom, background: "var(--panel-face)", boxShadow: `0 0 0 ${1.5 / zoom}px var(--selection)` }} />
+          </div>
+        ))}
+    </>
+  );
+});
 
 export function Board() {
   const camera = useBoard((s) => s.camera);
@@ -298,7 +386,12 @@ export function Board() {
 
   // messages from outside react (an export that failed) arrive as an event
   useEffect(() => {
-    const show = (e: Event) => toast({ title: String((e as CustomEvent).detail), variant: "error" });
+    // a plain string is a failure; { title } is ordinary news
+    const show = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      if (typeof d === "string") toast({ title: d, variant: "error" });
+      else toast({ title: d.title, duration: 2200 });
+    };
     window.addEventListener("putanything:toast", show);
     return () => window.removeEventListener("putanything:toast", show);
   }, [toast]);
@@ -311,11 +404,13 @@ export function Board() {
   };
 
   const selectFor = (id: string, additive: boolean) => {
-    const { selection } = getState();
+    const { selection, doc } = getState();
+    const ids = withGroups(doc, [id]);
     if (additive) {
-      setState({ selection: selection.includes(id) ? selection.filter((x) => x !== id) : [...selection, id] });
+      const out = new Set(ids);
+      setState({ selection: selection.includes(id) ? selection.filter((x) => !out.has(x)) : [...new Set([...selection, ...ids])] });
     } else if (!selection.includes(id)) {
-      setState({ selection: [id] });
+      setState({ selection: ids });
     }
   };
 
@@ -453,6 +548,33 @@ export function Board() {
     }
 
     if (t.closest("[data-nodrag]")) return;
+
+    const selGrip = t.closest("[data-sel-scale]") as HTMLElement | null;
+    if (selGrip) {
+      e.preventDefault();
+      const set = new Set(s.selection);
+      const items0 = s.doc.items.filter((i) => set.has(i.id));
+      const marks0 = s.doc.marks.filter((m) => set.has(m.id));
+      const r0 = union([...items0.map(itemRect), ...marks0.map(markRect)]);
+      if (!r0 || r0.w < 1 || r0.h < 1) return;
+      // no plate shrinks past its smallest size (unless it's already smaller)
+      const kMin = Math.min(1, Math.max(0.05, ...items0.map((i) => Math.max(WIDGETS[i.kind].min.w / i.w, WIDGETS[i.kind].min.h / i.h))));
+      beginGesture();
+      gesture.current = { type: "scaleSel", corner: selGrip.dataset.corner ?? "se", r0, kMin, items0, marks0, start: world, moved: false };
+      return;
+    }
+
+    const arrowGrip = t.closest("[data-arrow-end]") as HTMLElement | null;
+    if (arrowGrip) {
+      e.preventDefault();
+      const id = arrowGrip.dataset.arrowEnd!;
+      const end = arrowGrip.dataset.end === "a" ? "a" : "b";
+      beginGesture();
+      // the end lets go of what it was attached to while it's carried
+      live((d) => ({ ...d, marks: d.marks.map((m) => (m.id === id && m.kind === "arrow" ? { ...m, [end === "a" ? "from" : "to"]: undefined } : m)) }));
+      gesture.current = { type: "arrowEnd", id, end, moved: false };
+      return;
+    }
 
     const shapeGrip = t.closest("[data-shape-resize]") as HTMLElement | null;
     if (shapeGrip) {
@@ -686,6 +808,32 @@ export function Board() {
           live((d) => ({ ...d, marks: d.marks.map((m) => (m.id === g.id && m.kind === "shape" ? { ...m, ...r } : m)) }));
           break;
         }
+        case "scaleSel": {
+          g.moved = true;
+          const { r0, corner } = g;
+          // the opposite corner stays put
+          const o: Vec = [corner.includes("w") ? r0.x + r0.w : r0.x, corner.includes("n") ? r0.y + r0.h : r0.y];
+          const kx = Math.abs(w[0] - o[0]) / r0.w;
+          const ky = Math.abs(w[1] - o[1]) / r0.h;
+          const k = Math.min(20, Math.max(g.kMin, Math.max(kx, ky)));
+          const next = scaleParts(g.items0, g.marks0, o, k);
+          const items = new Map(next.items.map((i) => [i.id, i]));
+          const marks = new Map(next.marks.map((m) => [m.id, m]));
+          live((d) => ({
+            items: d.items.map((i) => items.get(i.id) ?? i),
+            marks: d.marks.map((m) => marks.get(m.id) ?? m),
+          }));
+          break;
+        }
+        case "arrowEnd": {
+          g.moved = true;
+          const a = s.doc.marks.find((m) => m.id === g.id);
+          if (!a || a.kind !== "arrow") break;
+          const other = g.end === "a" ? a.b : a.a;
+          const p = e.shiftKey ? snapAngle(other, w) : w;
+          live((d) => ({ ...d, marks: d.marks.map((m) => (m.id === g.id && m.kind === "arrow" ? { ...m, [g.end]: p } : m)) }));
+          break;
+        }
         case "noteScale": {
           g.moved = true;
           live((d) => ({
@@ -708,7 +856,7 @@ export function Board() {
             ...s.doc.items.filter((i) => contains(r, itemRect(i))).map((i) => i.id),
             ...s.doc.marks.filter((m) => contains(r, markRect(m))).map((m) => m.id),
           ];
-          const next = [...new Set([...g.base, ...hits])];
+          const next = withGroups(s.doc, [...new Set([...g.base, ...hits])]);
           if (next.join() !== s.selection.join()) setState({ selection: next });
           break;
         }
@@ -796,6 +944,35 @@ export function Board() {
           if (g.moved) endGesture();
           else cancelGesture();
           break;
+        case "scaleSel": {
+          if (!g.moved) {
+            cancelGesture();
+            break;
+          }
+          // plates land on whole pixels, words on half sizes
+          const ids = new Set([...g.items0, ...g.marks0].map((x) => x.id));
+          live((d) => ({
+            items: d.items.map((i) => (ids.has(i.id) ? { ...i, x: Math.round(i.x), y: Math.round(i.y), w: Math.round(i.w), h: Math.round(i.h) } : i)),
+            marks: d.marks.map((m) => (ids.has(m.id) && m.kind === "text" ? { ...m, size: Math.round(m.size * 2) / 2 } : m)),
+          }));
+          endGesture();
+          break;
+        }
+        case "arrowEnd": {
+          if (!g.moved) {
+            cancelGesture();
+            break;
+          }
+          // the end attaches to whatever it was dropped on
+          const doc = getState().doc;
+          const a = doc.marks.find((m) => m.id === g.id);
+          if (a && a.kind === "arrow") {
+            const at = targetAt(doc, g.end === "a" ? a.a : a.b, g.end === "a" ? a.to : a.from);
+            if (at) live((d) => ({ ...d, marks: d.marks.map((m) => (m.id === g.id ? { ...m, [g.end === "a" ? "from" : "to"]: at } : m)) }));
+          }
+          endGesture();
+          break;
+        }
         case "shape": {
           const m = getState().doc.marks.find((x) => x.id === g.id);
           if (!m || m.kind !== "shape" || (m.w < 6 && m.h < 6)) {
@@ -952,6 +1129,12 @@ export function Board() {
         } else if (k === "y") {
           e.preventDefault();
           redo();
+        } else if (k === "g") {
+          e.preventDefault();
+          const say = (title: string) => window.dispatchEvent(new CustomEvent("putanything:toast", { detail: { title } }));
+          if (e.shiftKey) {
+            if (ungroupSelection()) say("ungrouped.");
+          } else if (groupSelection()) say(`grouped. ${modKey()}⇧g takes them apart.`);
         } else if (k === "d") {
           e.preventDefault();
           duplicateSelection();
@@ -1170,6 +1353,11 @@ export function Board() {
       return [
         { key: "duplicate", label: "duplicate", shortcut: `${modKey()}d`, icon: <IconCopy size={15} /> },
         ...(isItem ? [{ key: "front", label: "bring to the front" }] : []),
+        ...(isOneGroup(doc, selection)
+          ? [{ key: "ungroup", label: "ungroup", shortcut: `⇧${modKey()}g`, icon: <IconUngroup size={15} /> }]
+          : selection.length > 1
+            ? [{ key: "group", label: "group them", shortcut: `${modKey()}g`, icon: <IconGroup size={15} /> }]
+            : []),
         { key: "lock", label: [...doc.items, ...doc.marks].find((x) => x.id === ctxTarget)?.locked ? "unlock" : "lock in place", icon: <IconLock size={15} /> },
         { key: "div", label: "", divider: true },
         { key: "delete", label: "take off the board", shortcut: "⌫", danger: true, icon: <IconTrash size={15} /> },
@@ -1181,7 +1369,7 @@ export function Board() {
       { key: "fit", label: "show everything", shortcut: "⇧1", icon: <IconFit size={15} /> },
       { key: "all", label: "select everything", shortcut: `${modKey()}a` },
     ];
-  }, [ctxTarget, doc.items, doc.marks]);
+  }, [ctxTarget, doc, selection]);
 
   const onCtxSelect = (key: string) => {
     const { world, target } = ctxAt.current;
@@ -1192,6 +1380,8 @@ export function Board() {
       if (key === "duplicate") duplicateSelection();
       if (key === "front") bringToFront(target);
       if (key === "lock") toggleLock();
+      if (key === "group") groupSelection();
+      if (key === "ungroup") ungroupSelection();
       if (key === "delete") removeWithNote(getState().selection);
     }
   };
@@ -1338,7 +1528,7 @@ export function Board() {
           >
             <div className="relative z-0 isolate">
               {items.map((item: Item) => (
-                <WidgetFrame key={item.id} item={item} selected={selSet.has(item.id)} onClose={closeItem} />
+                <WidgetFrame key={item.id} item={item} selected={selSet.has(item.id)} together={selection.length > 1} onClose={closeItem} />
               ))}
             </div>
             <div className="absolute top-0 left-0 z-10">
@@ -1371,6 +1561,7 @@ export function Board() {
                     </>
                   );
                 })()}
+              {tool === "select" && !spaceDown && <SelectionFrame doc={doc} selection={selection} zoom={camera.z} hidden={!!marquee} />}
               {marquee && (
                 <div
                   aria-hidden

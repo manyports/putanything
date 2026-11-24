@@ -165,11 +165,22 @@ export function serializeSelection() {
   return CLIP + JSON.stringify(parts);
 }
 
+/** copies of a group make a group of their own, not more members of the first one */
+function freshGroups() {
+  const map = new Map<string, string>();
+  return <T extends { group?: string }>(x: T): T => {
+    if (!x.group) return x;
+    if (!map.has(x.group)) map.set(x.group, uid());
+    return { ...x, group: map.get(x.group) };
+  };
+}
+
 function placeCopies(items: Item[], marks: Mark[], dx: number, dy: number) {
   const doc = getState().doc;
   let z = topZ(doc);
-  const newItems = items.map((i) => ({ ...i, id: uid(), x: i.x + dx, y: i.y + dy, z: ++z }));
-  const newMarks = marks.map((m) => ({ ...moveMark(m, dx, dy), id: uid() }));
+  const regroup = freshGroups();
+  const newItems = items.map((i) => regroup({ ...i, id: uid(), x: i.x + dx, y: i.y + dy, z: ++z }));
+  const newMarks = marks.map((m) => regroup({ ...moveMark(m, dx, dy), id: uid() }));
   commit((d) => ({ items: [...d.items, ...newItems], marks: [...d.marks, ...newMarks] }));
   setState({ selection: [...newItems.map((i) => i.id), ...newMarks.map((m) => m.id)], tool: "select" });
 }
@@ -179,8 +190,9 @@ export function cloneLive(ids: string[]): string[] {
   const { doc } = getState();
   const set = new Set(ids);
   let z = topZ(doc);
-  const items = doc.items.filter((i) => set.has(i.id)).map((i) => ({ ...i, id: uid(), z: ++z }));
-  const marks = doc.marks.filter((m) => set.has(m.id)).map((m) => ({ ...m, id: uid() }));
+  const regroup = freshGroups();
+  const items = doc.items.filter((i) => set.has(i.id)).map((i) => regroup({ ...i, id: uid(), z: ++z }));
+  const marks = doc.marks.filter((m) => set.has(m.id)).map((m) => regroup({ ...m, id: uid() }));
   live((d) => ({ items: [...d.items, ...items], marks: [...d.marks, ...marks] }));
   const next = [...items.map((i) => i.id), ...marks.map((m) => m.id)];
   setState({ selection: next });
@@ -577,6 +589,50 @@ export function toggleLock(ids = getState().selection) {
     marks: d.marks.map((m) => (set.has(m.id) ? { ...m, locked: lock || undefined } : m)),
   }));
   return lock;
+}
+
+/* ── Groups ─────────────────────────────────────────────────────────
+   A group is a shared id on its members. Pressing any member selects all
+   of them, so they move, scale, copy and delete as one.               */
+
+/** these ids, and everything grouped with any of them */
+export function withGroups(doc: Doc, ids: string[]): string[] {
+  const all = [...doc.items, ...doc.marks];
+  const want = new Set(ids);
+  const groups = new Set(all.filter((x) => x.group && want.has(x.id)).map((x) => x.group!));
+  if (!groups.size) return ids;
+  for (const x of all) if (x.group && groups.has(x.group)) want.add(x.id);
+  return [...want];
+}
+
+/** is everything selected one group already? */
+export function isOneGroup(doc: Doc, ids: string[]) {
+  const set = new Set(ids);
+  const parts = [...doc.items, ...doc.marks].filter((x) => set.has(x.id));
+  return parts.length > 1 && !!parts[0].group && parts.every((x) => x.group === parts[0].group);
+}
+
+export function groupSelection() {
+  const { selection } = getState();
+  if (selection.length < 2) return false;
+  const set = new Set(selection);
+  const g = uid();
+  commit((d) => ({
+    items: d.items.map((i) => (set.has(i.id) ? { ...i, group: g } : i)),
+    marks: d.marks.map((m) => (set.has(m.id) ? { ...m, group: g } : m)),
+  }));
+  return true;
+}
+
+export function ungroupSelection() {
+  const { selection, doc } = getState();
+  const set = new Set(selection);
+  if (![...doc.items, ...doc.marks].some((x) => set.has(x.id) && x.group)) return false;
+  commit((d) => ({
+    items: d.items.map((i) => (set.has(i.id) && i.group ? { ...i, group: undefined } : i)),
+    marks: d.marks.map((m) => (set.has(m.id) && m.group ? { ...m, group: undefined } : m)),
+  }));
+  return true;
 }
 
 /* ── Code and files ──────────────────────────────────────────────── */

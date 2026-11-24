@@ -28,11 +28,14 @@ export interface Item<D = Record<string, unknown>> {
   data: D;
   /** can't be moved, stretched or deleted until unlocked */
   locked?: boolean;
+  /** things sharing a group are selected, moved and scaled together */
+  group?: string;
 }
 
 export interface Stroke {
   id: string;
   kind: "stroke";
+  group?: string;
   /** x, y, pressure */
   pts: [number, number, number][];
   /** "ink" follows the theme, "accent" is the kit's violet, anything else is a hex */
@@ -48,6 +51,7 @@ export type PenStyle = "pen" | "pencil" | "marker";
 export interface Arrow {
   id: string;
   kind: "arrow";
+  group?: string;
   a: Vec;
   b: Vec;
   tone: string;
@@ -62,6 +66,7 @@ export interface Arrow {
 export interface Note {
   id: string;
   kind: "text";
+  group?: string;
   x: number;
   y: number;
   text: string;
@@ -83,6 +88,7 @@ export type ShapeFill = "none" | "tint" | "solid";
 export interface Shape {
   id: string;
   kind: "shape";
+  group?: string;
   shape: ShapeKind;
   x: number;
   y: number;

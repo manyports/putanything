@@ -454,3 +454,16 @@ export const IconCode = (p: P) => (
     <S d="M10.6 3.5h1.6l-2.8 13H7.8z" />
   </Svg>
 );
+export const IconGroup = (p: P) => (
+  <Svg {...p}>
+    <path d="M2.5 2.5h3M14.5 2.5h3v3M17.5 14.5v3h-3M5.5 17.5h-3v-3M2.5 5.5v-3" />
+    <W d="M5.5 5.5h6v5h-6z" />
+    <path d="M5.5 5.5h6v5h-6zM8.5 10.5v4h6v-6h-3" />
+  </Svg>
+);
+export const IconUngroup = (p: P) => (
+  <Svg {...p}>
+    <W d="M3 3h7v6H3z" />
+    <path d="M3 3h7v6H3zM10 11h7v6h-7z" />
+  </Svg>
+);

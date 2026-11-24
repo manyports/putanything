@@ -5,7 +5,17 @@ import type { Note, NoteFont, PenStyle, Shape, ShapeFill, ShapeKind, Tool, Widge
 import { NOTE_FONTS, NOTE_SIZES } from "@/lib/notes";
 import { commit, deleteIds, getState, setState, useBoard } from "@/lib/store";
 import { inkColor, swatchColor } from "@/lib/colors";
-import { addWidget, alignSelection, distributeSelection, duplicateSelection, toggleLock } from "@/lib/actions";
+import {
+  addWidget,
+  alignSelection,
+  distributeSelection,
+  duplicateSelection,
+  groupSelection,
+  isOneGroup,
+  toggleLock,
+  ungroupSelection,
+} from "@/lib/actions";
+import { modKey } from "./Chrome";
 import { useCoarse } from "./useCoarse";
 import { Tooltip } from "@blurrow/ui";
 import { WIDGETS } from "../widgets/registry";
@@ -34,6 +44,8 @@ import {
   IconShapes,
   IconText,
   IconTriangle,
+  IconGroup,
+  IconUngroup,
 } from "../icons";
 import { Segmented } from "./Segmented";
 import { ColorPanel, GRAPHITE, PAPERS, colorPanelWidth } from "./ColorPanel";
@@ -425,6 +437,7 @@ function ShapeStrip() {
    them. Rises above any other strip that's showing.                     */
 function ArrangeStrip({ raised, touch }: { raised: boolean; touch: boolean }) {
   const count = useBoard((s) => s.selection.length);
+  const grouped = useBoard((s) => isOneGroup(s.doc, s.selection));
   const allLocked = useBoard((s) => {
     const set = new Set(s.selection);
     const all = [...s.doc.items.filter((i) => set.has(i.id)), ...s.doc.marks.filter((m) => set.has(m.id))];
@@ -472,6 +485,13 @@ function ArrangeStrip({ raised, touch }: { raised: boolean; touch: boolean }) {
           {key("space evenly down", () => distributeSelection("y"), <IconDistribute axis="y" />, count < 3)}
         </div>
         </>
+        )}
+        {(count >= 2 || grouped) && (
+          <div className="well flex shrink-0 items-center rounded-[13px] p-1">
+            {grouped
+              ? key(`ungroup (${modKey()}⇧g)`, () => ungroupSelection(), <IconUngroup size={15} />)
+              : key(`group them (${modKey()}g)`, () => groupSelection(), <IconGroup size={15} />)}
+          </div>
         )}
         <div className="well flex shrink-0 items-center rounded-[13px] p-1">
           {key(allLocked ? "unlock them" : "lock them in place", () => toggleLock(), allLocked ? <IconLock size={15} /> : <IconUnlock size={15} />)}

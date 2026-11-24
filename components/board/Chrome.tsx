@@ -486,7 +486,7 @@ export function HelpSheet({ open, onClose }: { open: boolean; onClose: () => voi
         [["v"], "select and move"],
         [["space"], "hold to pan"],
         [["p"], "pen; then 1–4 for its width"],
-        [["a"], "arrow, shift snaps the angle"],
+        [["a"], "arrow, shift snaps the angle; drag its ends to stretch it"],
         [["t"], "note, or double-click the board"],
         [["↵"], "edit the selected note (or double-click it)"],
         [["drag", "side"], "set a note's width; its words wrap"],
@@ -510,6 +510,8 @@ export function HelpSheet({ open, onClose }: { open: boolean; onClose: () => voi
       title: "arranging",
       rows: [
         [[m, "d"], "duplicate"],
+        [[m, "g"], "group what's selected; add shift to ungroup"],
+        [["drag", "corner"], "with several selected, scale them all together"],
         [["alt", "drag"], "drag a copy away"],
         [[m, "drag"], "move without snapping"],
         [["⌫"], "take it off the board"],

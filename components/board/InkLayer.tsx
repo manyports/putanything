@@ -461,7 +461,35 @@ export const InkLayer = memo(function InkLayer({ marks, selection, interactive, 
             </div>
           ));
         })()}
+      {selected.length === 1 &&
+        selected[0].kind === "arrow" &&
+        !selected[0].locked &&
+        interactive &&
+        (() => {
+          // an arrow's two ends: drag one to stretch, shorten or turn the arrow, or attach it somewhere else
+          const a = selected[0];
+          const g = 10 / zoom;
+          return (["a", "b"] as const).map((end) => {
+            const [x, y] = a[end];
+            return (
+              <div
+                key={end}
+                data-arrow-end={a.id}
+                data-end={end}
+                title="drag to move this end"
+                className="absolute z-10 grid place-items-center"
+                style={{ left: x - g, top: y - g, width: g * 2, height: g * 2, cursor: "crosshair" }}
+              >
+                <span
+                  className="block"
+                  style={{ width: 10 / zoom, height: 10 / zoom, background: "var(--panel-face)", boxShadow: `0 0 0 ${1.5 / zoom}px var(--selection)` }}
+                />
+              </div>
+            );
+          });
+        })()}
       {selected.map((m) => {
+        if (m.kind === "arrow" && selected.length === 1) return null;
         const r = markRect(m);
         const p = 6 / zoom;
         return (
