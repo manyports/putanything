@@ -34,7 +34,7 @@ import {
   fitAll,
   nudge,
   parseBoardFile,
-  putImage,
+  putFile,
   putText,
   resetZoom,
   selectAll,
@@ -222,6 +222,8 @@ export function Board() {
   const touches = useRef(new Map<number, Vec>());
   const spaceRef = useRef(false);
   const penSeen = useRef(false);
+  // the paste listener is set up once; it reaches the current way of laying files down through this
+  const layFilesRef = useRef<(files: File[], at?: Vec) => Promise<void>>(async () => {});
   const fileRef = useRef<HTMLInputElement>(null);
   const ctxAt = useRef<{ world: Vec; target: string | null }>({ world: [0, 0], target: null });
 
@@ -1085,16 +1087,9 @@ export function Board() {
       if (document.activeElement?.closest('input, textarea, [contenteditable="true"]')) return;
       const dt = e.clipboardData;
       if (!dt) return;
-      const pdf = [...dt.files].find((f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
-      if (pdf) {
+      if (dt.files.length) {
         e.preventDefault();
-        setPdfFile(pdf);
-        return;
-      }
-      const images = [...dt.files].filter((f) => f.type.startsWith("image/"));
-      if (images.length) {
-        e.preventDefault();
-        images.forEach((f) => putImage(f).catch(() => toast({ title: "that picture couldn't be read.", variant: "error" })));
+        layFilesRef.current([...dt.files]);
         return;
       }
       // a copied link may arrive only as a uri list or as a single anchor in html
@@ -1126,27 +1121,35 @@ export function Board() {
     setDropping(false);
     const at = toWorld(getState().camera, e.clientX, e.clientY);
     const files = [...e.dataTransfer.files];
-    const images = files.filter((f) => f.type.startsWith("image/"));
-    const boards = files.filter((f) => f.name.endsWith(".json"));
-    const pdf = files.find((f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
-    if (pdf) {
-      setPdfFile(pdf);
-      return;
-    }
-    if (images.length) {
-      for (let i = 0; i < images.length; i++) {
-        await putImage(images[i], [at[0] + i * 28, at[1] + i * 28]).catch(() => {});
-      }
-      return;
-    }
-    if (boards.length) {
-      importFile(boards[0]);
+    if (files.length) {
+      await layFiles(files, at);
       return;
     }
     const uri = e.dataTransfer.getData("text/uri-list").split("\n").find((l) => l && !l.startsWith("#"));
     const text = uri || e.dataTransfer.getData("text/plain");
     if (text) putText(text, at);
   };
+
+  /* ── Files of any kind ─────────────────────────────────────────── */
+  const layFiles = async (files: File[], at?: Vec) => {
+    const start = at ?? null;
+    let i = 0;
+    for (const f of files) {
+      const here: Vec | undefined = start ? [start[0] + i * 36, start[1] + i * 36] : undefined;
+      try {
+        const r = await putFile(f, here);
+        if (r === "pdf") setPdfFile(f);
+        if (r === "board") importFile(f);
+      } catch {
+        toast({ title: `${f.name} couldn't be laid down. files up to 2 GB fit.`, variant: "error" });
+      }
+      i++;
+    }
+  };
+
+  useEffect(() => {
+    layFilesRef.current = layFiles;
+  });
 
   /* ── Board files ───────────────────────────────────────────────── */
   const importFile = async (file: File) => {
@@ -1448,14 +1451,11 @@ export function Board() {
         ref={mediaRef}
         type="file"
         multiple
-        accept="image/*,application/pdf,.pdf"
         className="hidden"
         onChange={async (e) => {
           const files = [...(e.target.files ?? [])];
           e.target.value = "";
-          const pdf = files.find((f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
-          if (pdf) return setPdfFile(pdf);
-          for (const f of files.filter((x) => x.type.startsWith("image/"))) await putImage(f).catch(() => {});
+          await layFiles(files);
         }}
       />
       <PdfImport file={pdfFile} onDone={() => setPdfFile(null)} />

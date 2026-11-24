@@ -26,7 +26,8 @@ export default function PrivacyPage() {
       <Section title="what is kept on your device.">
         <p>
           everything on your boards is saved in this browser&apos;s <strong>IndexedDB</strong>, on the device you&apos;re
-          using: notes, stickies, checklists, tables, drawings, shapes, pasted pictures, pages taken from PDFs, link cards and
+          using: notes, stickies, checklists, tables, code, drawings, shapes, pasted pictures, pages taken from PDFs, files you lay on
+          a board, link cards and
           the previews fetched for them, the cities on your clocks and weather, words you&apos;ve looked up, timers,
           countdowns, and the names of your boards. it&apos;s written a moment after each change and again when you leave the
           tab. the site asks your browser to keep this storage rather than clear it when space runs low.
@@ -102,6 +103,11 @@ export default function PrivacyPage() {
           <li>
             <strong>pictures and PDFs</strong> you paste or drop are read on your device. a PDF&apos;s pages are drawn into
             pictures in your browser; neither the file nor its pages is uploaded.
+          </li>
+          <li>
+            <strong>files</strong> you paste or drop are kept on your device exactly as they are. they aren&apos;t opened,
+            previewed, scanned or uploaded; code files are read as text so they can be shown and edited, still only in your
+            browser.
           </li>
           <li>
             <strong>notifications.</strong> the timer and the countdown can notify you, but only after you switch on their

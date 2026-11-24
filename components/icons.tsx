@@ -442,3 +442,15 @@ export const IconMap = (p: P) => (
     <path d="M2.5 4.5l5-1.5 5 1.5 5-1.5v12.5l-5 1.5-5-1.5-5 1.5zM7.5 3v12.5M12.5 4.5V17" />
   </Svg>
 );
+export const IconFile = (p: P) => (
+  <Svg {...p}>
+    <W d="M5 2.5h6.5L15.5 6.5V17.5H5z" />
+    <path d="M5 2.5h6.5L15.5 6.5V17.5H5zM11.5 2.5v4h4" />
+  </Svg>
+);
+export const IconCode = (p: P) => (
+  <Svg {...p}>
+    <path d="M7 5.5L2.5 10 7 14.5M13 5.5l4.5 4.5-4.5 4.5" />
+    <S d="M10.6 3.5h1.6l-2.8 13H7.8z" />
+  </Svg>
+);

@@ -52,7 +52,7 @@ const TOOLS: { tool: Tool; label: string; key: string; icon: React.ReactNode }[]
 /* The tray, in three plain groups: things you write, things that work
    something out, things that look something up.                       */
 const GROUPS: WidgetKind[][] = [
-  ["sticky", "todo", "table"],
+  ["sticky", "todo", "table", "code"],
   ["calc", "timer", "convert", "countdown"],
   ["clock", "weather", "dict"],
 ];
@@ -190,13 +190,13 @@ function AddKey() {
         <FlyRow
           icon={<IconImage />}
           hint="or paste"
-          title="a picture, or pages from a pdf"
+          title="a picture, pages from a pdf, code, or any file"
           onClick={() => {
             setOpen(false);
             window.dispatchEvent(new Event("putanything:pick-media"));
           }}
         >
-          picture or pdf
+          picture, pdf or file
         </FlyRow>
         <FlySep />
         {GROUPS.map((g, gi) => (

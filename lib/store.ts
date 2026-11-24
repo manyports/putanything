@@ -473,10 +473,10 @@ export async function loadBoard(seed: () => Doc, cameraFor: (doc: Doc) => Camera
   // later, quietly: pictures that no board refers to any more are removed from the device
   setTimeout(async () => {
     const inUse = new Set<string>();
-    for (const b of await allBoards()) for (const i of b.doc.items) if (i.kind === "image" && typeof i.data.src === "string") inUse.add(i.data.src);
+    for (const b of await allBoards()) for (const i of b.doc.items) if (typeof i.data.src === "string") inUse.add(i.data.src);
     // anything undo or redo could bring back, on any board, counts as in use
     const histories_ = [{ past, future }, ...histories.values()];
-    for (const h of histories_) for (const d of [...h.past, ...h.future]) for (const i of d.items) if (i.kind === "image" && typeof i.data.src === "string") inUse.add(i.data.src);
+    for (const h of histories_) for (const d of [...h.past, ...h.future]) for (const i of d.items) if (typeof i.data.src === "string") inUse.add(i.data.src);
     sweepAssets(inUse).catch(() => {});
   }, 15000);
   document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && now());

@@ -17,6 +17,8 @@ import {
   IconSwap,
   IconTimer,
   IconTable,
+  IconCode,
+  IconFile,
 } from "../icons";
 import type { WidgetProps } from "./parts";
 import { Sticky, StickyRail, type StickyData } from "./Sticky";
@@ -31,6 +33,8 @@ import { Countdown, CountdownRail } from "./Countdown";
 import { LinkCard, LinkRail, type LinkData } from "./LinkCard";
 import { Picture, PictureRail } from "./Picture";
 import { Table, TableRail } from "./Table";
+import { CodeCard, CodeRail, type CodeData } from "./CodeCard";
+import { FileCard, FileRail } from "./FileCard";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export interface WidgetDef {
@@ -191,6 +195,31 @@ export const WIDGETS: Record<WidgetKind, WidgetDef> = {
     Component: Table,
     Rail: TableRail,
     onShelf: true,
+  },
+  code: {
+    kind: "code",
+    name: "code",
+    blurb: "paste code or drop a code file. coloured, editable, opens big.",
+    icon: <IconCode />,
+    size: { w: 480, h: 320 },
+    min: { w: 220, h: 120 },
+    create: (): CodeData => ({ code: "", lang: "javascript", editing: true }),
+    title: (d: CodeData) => d.name ?? "code",
+    Component: CodeCard,
+    Rail: CodeRail,
+    onShelf: true,
+  },
+  file: {
+    kind: "file",
+    name: "file",
+    blurb: "drop any file to keep it on the board.",
+    icon: <IconFile />,
+    size: { w: 320, h: 110 },
+    min: { w: 220, h: 96 },
+    create: () => ({ src: "", name: "", size: 0, type: "" }),
+    Component: FileCard,
+    Rail: FileRail,
+    onShelf: false,
   },
   link: {
     kind: "link",

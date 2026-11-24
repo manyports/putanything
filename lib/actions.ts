@@ -6,6 +6,7 @@ import { clamp, itemRect, markRect, moveMark, toWorld, union } from "./geom";
 import { WIDGETS } from "@/components/widgets/registry";
 import { readImage } from "@/components/widgets/Picture";
 import { putAsset, srcAsDataUrl } from "./assets";
+import { guessLang, langFromName, looksLikeCode, unfence } from "./code";
 import { parseGrid } from "@/components/widgets/Table";
 
 /* ── Where things land ───────────────────────────────────────────── */
@@ -274,6 +275,13 @@ export function putText(text: string, at?: Vec) {
     return addWidget("table", at, { header: true, rows: grid }, { w: clamp(cols * 150 + 56, 340, 960), h: clamp(grid.length * 37 + 84, 180, 640) });
   }
 
+  // code: fenced in markdown, or plainly code
+  const fenced = unfence(text);
+  if (fenced || looksLikeCode(text)) {
+    const code = fenced ? fenced.code : text.replace(/\s+$/, "");
+    return putCode(code, fenced?.lang ?? guessLang(code), undefined, at);
+  }
+
   const lines = t.split(/\r?\n/).filter((l) => l.trim());
   if (lines.length >= 2 && lines.filter((l) => LIST_RE.test(l)).length >= Math.ceil(lines.length * 0.6)) {
     const items = lines.map((l) => ({
@@ -334,7 +342,9 @@ export async function exportBoard() {
   const doc = {
     ...live,
     items: await Promise.all(
-      live.items.map(async (i) => (i.kind === "image" ? { ...i, data: { ...i.data, src: await srcAsDataUrl(String(i.data.src)) } } : i)),
+      live.items.map(async (i) =>
+        i.kind === "image" || i.kind === "file" ? { ...i, data: { ...i.data, src: await srcAsDataUrl(String(i.data.src)) } } : i,
+      ),
     ),
   };
   const blob = new Blob([JSON.stringify({ app: "putanything", version: 1, doc }, null, 1)], {
@@ -567,4 +577,39 @@ export function toggleLock(ids = getState().selection) {
     marks: d.marks.map((m) => (set.has(m.id) ? { ...m, locked: lock || undefined } : m)),
   }));
   return lock;
+}
+
+/* ── Code and files ──────────────────────────────────────────────── */
+/** a code plate sized to its code: wide enough for most lines, tall enough for a screenful */
+export function putCode(code: string, lang: string, name?: string, at?: Vec) {
+  const lines = code.split("\n");
+  const longest = Math.max(...lines.map((l) => l.replace(/\t/g, "  ").length), 20);
+  const w = clamp(Math.round(longest * 7.6 + 90), 340, 760);
+  const h = clamp(lines.length * 21 + 70, 140, 560);
+  return addWidget("code", at, { code, lang, name }, { w, h });
+}
+
+const CODE_LIMIT = 1024 * 1024;
+const FILE_LIMIT = 2 * 1024 ** 3;
+
+/* Any file: a picture or pdf has its own way in; code under a megabyte is
+   read as code; a saved board opens as a board; everything else lands as a
+   file card, kept on the device and never opened.                       */
+export async function putFile(file: File, at?: Vec): Promise<"board" | "pdf" | void> {
+  const name = file.name || "untitled";
+  if (file.type === "application/pdf" || /\.pdf$/i.test(name)) return "pdf";
+  if (file.type.startsWith("image/") && !/\.(svg|psd|ai|heic)$/i.test(name)) {
+    await putImage(file, at);
+    return;
+  }
+  const lang = langFromName(name) ?? (file.type.startsWith("text/") ? "text" : null);
+  if (lang && file.size <= CODE_LIMIT) {
+    const text = await file.text();
+    if (lang === "json" && parseBoardFile(text)) return "board";
+    putCode(text.replace(/\s+$/, ""), lang, name, at);
+    return;
+  }
+  if (file.size > FILE_LIMIT) throw new Error("too big");
+  const src = await putAsset(file);
+  addWidget("file", at, { src, name, size: file.size, type: file.type, modified: file.lastModified || undefined }, { w: 330, h: 112 });
 }

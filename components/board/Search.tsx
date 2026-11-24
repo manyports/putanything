@@ -34,7 +34,10 @@ function itemText(i: Item): string {
     case "dict":
       return [d.word, ...((d.recent as string[]) ?? [])].filter(Boolean).join(" · ");
     case "image":
+    case "file":
       return String(d.name ?? "");
+    case "code":
+      return [d.name, d.code].filter(Boolean).join(" · ");
     case "weather":
       return String((d.place as { name?: string } | null)?.name ?? "");
     case "clock":

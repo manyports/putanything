@@ -12,7 +12,9 @@ export type WidgetKind =
   | "countdown"
   | "link"
   | "image"
-  | "table";
+  | "table"
+  | "code"
+  | "file";
 
 /* A widget plate placed on the board. `data` belongs to the widget. */
 export interface Item<D = Record<string, unknown>> {
