@@ -71,8 +71,10 @@ export default function PrivacyPage() {
             recording from the same service.
           </li>
           <li>
-            <strong>frankfurter.dev</strong>, for currency in the converter: a request for the day&apos;s european central
-            bank rates. nothing you type is sent; the sum is worked out in your browser.
+            <strong>frankfurter.dev</strong> and <strong>open.er-api.com</strong> (exchangerate-api.com), for currency in the
+            converter: a request for the day&apos;s rates, the european central bank&apos;s from the first and the rest of
+            the world&apos;s (the tenge, for one) from the second. nothing you type is sent; the sum is worked out in your
+            browser.
           </li>
           <li>
             <strong>youtube</strong>, for youtube link cards: the card&apos;s picture loads from youtube&apos;s image server

@@ -16,19 +16,37 @@ export interface ConvertData {
   side: "from" | "to";
 }
 
-let ratesPromise: Promise<{ date: string; rates: Record<string, number> }> | null = null;
-function loadRates() {
+type Rates = { date: string; rates: Record<string, number>; ecb: Set<string> };
+let ratesPromise: Promise<Rates> | null = null;
+
+/* Two sources, each doing what it's best at. The european central bank's
+   reference rates for the ~30 currencies it publishes; ExchangeRate-API's
+   open rates for the rest of the world (the tenge, the dirham, the naira…).
+   Both are based on the euro, so they sit in one table. If one is down,
+   the other still answers.                                              */
+function loadRates(): Promise<Rates> {
   if (!ratesPromise) {
-    ratesPromise = fetch("https://api.frankfurter.dev/v1/latest?base=EUR")
-      .then((r) => {
-        if (!r.ok) throw new Error("rates");
-        return r.json();
-      })
-      .then((j) => ({ date: j.date as string, rates: { EUR: 1, ...(j.rates as Record<string, number>) } }))
-      .catch((e) => {
-        ratesPromise = null;
-        throw e;
+    const ecb = fetch("https://api.frankfurter.dev/v1/latest?base=EUR")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("ecb"))))
+      .then((j) => ({ date: j.date as string, rates: { EUR: 1, ...(j.rates as Record<string, number>) } }));
+    const world = fetch("https://open.er-api.com/v6/latest/EUR")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("world"))))
+      .then((j) => {
+        if (j.result !== "success") throw new Error("world");
+        return { date: new Date((j.time_last_update_unix as number) * 1000).toISOString().slice(0, 10), rates: j.rates as Record<string, number> };
       });
+    ratesPromise = Promise.allSettled([ecb, world]).then(([e, w]) => {
+      if (e.status === "rejected" && w.status === "rejected") throw new Error("rates");
+      const fromEcb = e.status === "fulfilled" ? e.value : null;
+      const fromWorld = w.status === "fulfilled" ? w.value : null;
+      return {
+        date: fromEcb?.date ?? fromWorld!.date,
+        // the central bank's figure wins wherever it has one
+        rates: { ...(fromWorld?.rates ?? {}), ...(fromEcb?.rates ?? {}) },
+        ecb: new Set(Object.keys(fromEcb?.rates ?? {})),
+      };
+    });
+    ratesPromise.catch(() => (ratesPromise = null));
   }
   return ratesPromise;
 }
@@ -63,7 +81,7 @@ function Row({
 }
 
 export const Converter = memo(function Converter({ data, set }: WidgetProps<ConvertData>) {
-  const [rates, setRates] = useState<{ date: string; rates: Record<string, number> } | null>(null);
+  const [rates, setRates] = useState<Rates | null>(null);
   const [rateErr, setRateErr] = useState(false);
   const cat = CATEGORIES.find((c) => c.key === data.cat) ?? CATEGORIES[0];
 
@@ -141,7 +159,22 @@ export const Converter = memo(function Converter({ data, set }: WidgetProps<Conv
           ? rateErr
             ? "couldn't fetch today's rates. you might be offline."
             : rates
-              ? `rates from ${rates.date}, european central bank.`
+              ? (
+                  <>
+                    rates from {rates.date}
+                    {[data.from, data.to].every((c) => rates.ecb.has(c)) ? (
+                      ", european central bank."
+                    ) : (
+                      <>
+                        , by{" "}
+                        <a href="https://www.exchangerate-api.com" target="_blank" rel="noreferrer" className="underline decoration-ink-ghost underline-offset-2 hover:text-ink">
+                          exchange rate api
+                        </a>
+                        {rates.ecb.size ? " and the european central bank." : "."}
+                      </>
+                    )}
+                  </>
+                )
               : "fetching today's rates…"
           : ""}
       </p>

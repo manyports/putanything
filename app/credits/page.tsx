@@ -103,7 +103,9 @@ export default function CreditsPage() {
           weather from <a href="https://open-meteo.com" rel="noreferrer">open-meteo.com</a>, under cc by 4.0. definitions
           from the <a href="https://dictionaryapi.dev" rel="noreferrer">free dictionary api</a>, drawn from wiktionary under
           cc by-sa. exchange rates from the european central bank, through{" "}
-          <a href="https://frankfurter.dev" rel="noreferrer">frankfurter.dev</a>.
+          <a href="https://frankfurter.dev" rel="noreferrer">frankfurter.dev</a>, and{" "}
+          <a href="https://www.exchangerate-api.com" rel="noreferrer">rates by exchange rate api</a> for the other
+          currencies, like the kazakhstani tenge.
         </p>
       </Section>
     </LegalPage>

@@ -41,7 +41,9 @@ export default function TermsPage() {
           weather comes from <a href="https://open-meteo.com" rel="noreferrer">open-meteo.com</a> under the cc by 4.0
           licence. definitions come from <a href="https://dictionaryapi.dev" rel="noreferrer">dictionaryapi.dev</a>, which
           draws on wiktionary. exchange rates come from the european central bank through{" "}
-          <a href="https://frankfurter.dev" rel="noreferrer">frankfurter.dev</a> and are published once each working day.
+          <a href="https://frankfurter.dev" rel="noreferrer">frankfurter.dev</a>, published once each working day, and,
+          for currencies the central bank doesn&apos;t publish, from{" "}
+          <a href="https://www.exchangerate-api.com" rel="noreferrer">exchange rate api</a>, updated daily.
         </p>
         <p>
           youtube videos that play in a card are youtube&apos;s, shown through youtube&apos;s own player and under its
