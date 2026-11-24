@@ -457,7 +457,10 @@ export async function putPages(
 }
 
 /* ── Pictures of the board ───────────────────────────────────────── */
-/** Save the board, or just what's selected, as a PNG at twice screen resolution. */
+/** Pixels in an exported picture at most: past this, a huge board comes out a little below 2× rather than not at all. */
+const EXPORT_MAX_PX = 600_000_000;
+
+/** Save the board, or just what's selected, as a PNG at twice screen resolution (less only for enormous boards). */
 export async function exportPng(only: "board" | "selection" = "board") {
   const { doc, selection, boards, activeBoard } = getState();
   const set = new Set(selection);
@@ -473,15 +476,22 @@ export async function exportPng(only: "board" | "selection" = "board") {
   // outlines and hover keys belong to the screen, not the picture
   setState({ selection: [], editingNote: null, editingShape: null });
   await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
-  const { toPng } = await import("html-to-image");
+  const { toSvg } = await import("html-to-image");
+  const { drawPng } = await import("./png");
   const keep = pick ? set : null;
+  // the scale goes into the page itself, so the picture is laid out at full size and
+  // drawn 1:1, instead of being drawn small and stretched
+  const scale = Math.min(2, Math.sqrt(EXPORT_MAX_PX / (box.w * box.h)));
+  const w = Math.ceil(box.w * scale);
+  const h = Math.ceil(box.h * scale);
+  const background = getComputedStyle(document.body).backgroundColor;
+  let href = "";
   try {
-    const url = await toPng(world, {
-      width: Math.ceil(box.w),
-      height: Math.ceil(box.h),
-      pixelRatio: 2,
-      backgroundColor: getComputedStyle(document.body).backgroundColor,
-      style: { transform: `translate(${-box.x}px, ${-box.y}px)`, transformOrigin: "0 0" },
+    const svg = await toSvg(world, {
+      width: w,
+      height: h,
+      backgroundColor: background,
+      style: { transform: `scale(${scale}) translate(${-box.x}px, ${-box.y}px)`, transformOrigin: "0 0" },
       // a picture from another site that won't share itself stays a blank space instead of failing the export
       imagePlaceholder: "data:image/gif;base64,R0lGODlhAQABAAAAACw=",
       filter: (node) => {
@@ -499,8 +509,18 @@ export async function exportPng(only: "board" | "selection" = "board") {
         return true;
       },
     });
+    const img = new Image();
+    img.decoding = "sync";
+    await new Promise((res, rej) => {
+      img.onload = res;
+      img.onerror = rej;
+      img.src = svg;
+    });
+    await img.decode().catch(() => {});
+    const blob = await drawPng(img, w, h, background);
+    href = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
+    a.href = href;
     const name = (boards.find((b) => b.id === activeBoard)?.name ?? "board").replace(/[^\w-]+/g, "-");
     a.download = `${name}${pick ? "-selection" : ""}.png`;
     a.click();
@@ -510,6 +530,7 @@ export async function exportPng(only: "board" | "selection" = "board") {
     return false;
   } finally {
     setState({ selection });
+    if (href) setTimeout(() => URL.revokeObjectURL(href), 60_000);
   }
 }
 
