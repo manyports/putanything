@@ -66,7 +66,7 @@ export function PdfImport({ file, onDone }: { file: File | null; onDone: () => v
       if (r) pages.push({ ...r, name: `${file?.name.replace(/\.pdf$/i, "") ?? "pdf"} · p${n}` });
       setBusy({ done: pages.length, of: picked.length });
     }
-    putPages(pages, layout, arrows && picked.length > 1);
+    await putPages(pages, layout, arrows && picked.length > 1);
     onDone();
   };
 

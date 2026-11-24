@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import type { Camera, Doc, Item, Mark, Tool } from "./types";
 import { idbDelete, idbGet, idbSet } from "./idb";
 import { settleArrows } from "./bind";
+import { sweepAssets } from "./assets";
 
 export interface BoardMeta {
   id: string;
@@ -227,17 +228,26 @@ let pendingCam: { id: string; cam: Camera } | null = null;
 let docTimer: ReturnType<typeof setTimeout> | null = null;
 let camTimer: ReturnType<typeof setTimeout> | null = null;
 
+let writing = 0;
+
 function writeDoc() {
   if (docTimer) clearTimeout(docTimer);
   docTimer = null;
   const p = pendingDoc;
   pendingDoc = null;
   if (!p) return Promise.resolve();
+  writing++;
   return idbSet(docKey(p.id), p.doc)
     .then(() => {
       if (!pendingDoc) setState({ saveState: "saved", savedAt: Date.now() });
     })
-    .catch(() => setState({ saveState: "error" }));
+    .catch(() => setState({ saveState: "error" }))
+    .finally(() => writing--);
+}
+
+/** true while a change hasn't reached storage yet */
+export function unsaved() {
+  return !!pendingDoc || writing > 0;
 }
 
 function writeCam() {
@@ -439,7 +449,7 @@ export async function loadBoard(seed: () => Doc, cameraFor: (doc: Doc) => Camera
       pendingDoc = { id: state.activeBoard, doc: state.doc };
       if (state.saveState !== "saving") setState({ saveState: "saving" });
       if (docTimer) clearTimeout(docTimer);
-      docTimer = setTimeout(writeDoc, 400);
+      docTimer = setTimeout(writeDoc, 150);
     }
     if (state.camera !== lastCam) {
       lastCam = state.camera;
@@ -453,5 +463,21 @@ export async function loadBoard(seed: () => Doc, cameraFor: (doc: Doc) => Camera
     flush();
   };
   window.addEventListener("pagehide", now);
+  // reloading or closing in the moment a change is still being written: start the write, and ask first
+  window.addEventListener("beforeunload", (e) => {
+    if (!unsaved()) return;
+    flush();
+    e.preventDefault();
+    e.returnValue = "";
+  });
+  // later, quietly: pictures that no board refers to any more are removed from the device
+  setTimeout(async () => {
+    const inUse = new Set<string>();
+    for (const b of await allBoards()) for (const i of b.doc.items) if (i.kind === "image" && typeof i.data.src === "string") inUse.add(i.data.src);
+    // anything undo or redo could bring back, on any board, counts as in use
+    const histories_ = [{ past, future }, ...histories.values()];
+    for (const h of histories_) for (const d of [...h.past, ...h.future]) for (const i of d.items) if (i.kind === "image" && typeof i.data.src === "string") inUse.add(i.data.src);
+    sweepAssets(inUse).catch(() => {});
+  }, 15000);
   document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && now());
 }

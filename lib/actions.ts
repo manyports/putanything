@@ -5,6 +5,7 @@ import { commit, getState, live, setState, topZ, uid } from "./store";
 import { clamp, itemRect, markRect, moveMark, toWorld, union } from "./geom";
 import { WIDGETS } from "@/components/widgets/registry";
 import { readImage } from "@/components/widgets/Picture";
+import { putAsset, srcAsDataUrl } from "./assets";
 import { parseGrid } from "@/components/widgets/Table";
 
 /* ── Where things land ───────────────────────────────────────────── */
@@ -314,7 +315,9 @@ function putLinks(links: string[], at?: Vec) {
 }
 
 export async function putImage(file: Blob, at?: Vec, name?: string) {
-  const data = await readImage(file, name ?? (file instanceof File ? file.name : "pasted picture"));
+  const read = await readImage(file, name ?? (file instanceof File ? file.name : "pasted picture"));
+  // written to the device first; the plate only appears once its picture is safe
+  const data = { ...read, src: await putAsset(read.src) };
   const maxW = 480;
   const maxH = 420;
   const s = Math.min(1, maxW / data.nw, maxH / data.nh);
@@ -325,8 +328,15 @@ export async function putImage(file: Blob, at?: Vec, name?: string) {
 }
 
 /* ── The whole board as a file ───────────────────────────────────── */
-export function exportBoard() {
-  const { doc } = getState();
+export async function exportBoard() {
+  const { doc: live } = getState();
+  // pictures kept on the device go into the file itself, so it opens anywhere
+  const doc = {
+    ...live,
+    items: await Promise.all(
+      live.items.map(async (i) => (i.kind === "image" ? { ...i, data: { ...i.data, src: await srcAsDataUrl(String(i.data.src)) } } : i)),
+    ),
+  };
   const blob = new Blob([JSON.stringify({ app: "putanything", version: 1, doc }, null, 1)], {
     type: "application/json",
   });
@@ -358,12 +368,14 @@ export function parseBoardFile(text: string): Doc | null {
 export type PageLayout = "row" | "column" | "grid" | "pile";
 
 /** Put rendered pages down in reading order, as one undo step, optionally joined by arrows. */
-export function putPages(
-  pages: { src: string; nw: number; nh: number; name: string }[],
+export async function putPages(
+  drawn: { src: string; nw: number; nh: number; name: string }[],
   layout: PageLayout,
   arrows: boolean,
 ) {
-  if (!pages.length) return;
+  if (!drawn.length) return;
+  // every page is written to the device before any of them lands on the board
+  const pages = await Promise.all(drawn.map(async (p) => ({ ...p, src: await putAsset(p.src) })));
   const doc = getState().doc;
   const faceW = 360;
   const gap = arrows && layout !== "pile" ? 76 : 32;

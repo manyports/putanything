@@ -1,6 +1,7 @@
 "use client";
 
 import { memo } from "react";
+import { resolveSrc, useAssetSrc } from "@/lib/assets";
 import { IconDownload } from "../icons";
 import { RailKey, type WidgetProps } from "./parts";
 
@@ -12,10 +13,13 @@ export interface PictureData {
 }
 
 export const Picture = memo(function Picture({ data }: WidgetProps<PictureData>) {
+  const src = useAssetSrc(data.src);
   return (
     <div className="relative h-full w-full" style={{ background: "var(--media-well)" }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={data.src} alt={data.name} draggable={false} className="absolute inset-0 h-full w-full object-contain" />
+      {src && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={data.name} draggable={false} className="absolute inset-0 h-full w-full object-contain" />
+      )}
     </div>
   );
 });
@@ -24,9 +28,9 @@ export function PictureRail({ data }: WidgetProps<PictureData>) {
   return (
     <RailKey
       label="save the picture"
-      onClick={() => {
+      onClick={async () => {
         const a = document.createElement("a");
-        a.href = data.src;
+        a.href = (await resolveSrc(data.src)) ?? data.src;
         a.download = data.name || "picture";
         a.click();
       }}

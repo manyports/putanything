@@ -44,3 +44,13 @@ export async function idbDelete(key: string): Promise<void> {
     tx.onerror = () => reject(tx.error);
   });
 }
+
+/** every key that starts with `prefix` */
+export async function idbKeys(prefix: string): Promise<string[]> {
+  const db = await open();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(STORE, "readonly").objectStore(STORE).getAllKeys(IDBKeyRange.bound(prefix, prefix + "￿"));
+    req.onsuccess = () => resolve((req.result as IDBValidKey[]).map(String));
+    req.onerror = () => reject(req.error);
+  });
+}
