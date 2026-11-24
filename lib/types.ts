@@ -67,6 +67,8 @@ export interface Note {
   tone: string;
   locked?: boolean;
   font?: NoteFont;
+  /** the text wraps at this width; without it a note is as wide as its longest line */
+  width?: number;
   bold?: boolean;
   align?: "left" | "center" | "right";
 }

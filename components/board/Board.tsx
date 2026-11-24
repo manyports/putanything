@@ -6,6 +6,7 @@ import type { Arrow, Doc, Item, Mark, Note, Rect, Shape, Stroke, Tool, Vec, Widg
 import {
   beginGesture,
   bringToFront,
+  commit,
   deleteBoard,
   switchBoard,
   cancelGesture,
@@ -88,7 +89,7 @@ type Gesture =
   | { type: "marquee"; start: Vec; base: string[] }
   | { type: "shape"; id: string; start: Vec }
   | { type: "shapeSize"; id: string; corner: string; r0: Rect; start: Vec; moved: boolean }
-  | { type: "noteScale"; id: string; corner: string; r0: Rect; size0: number; start: Vec; moved: boolean }
+  | { type: "noteScale"; id: string; corner: string; r0: Rect; size0: number; width0?: number; start: Vec; moved: boolean }
   | { type: "pen"; id: string }
   | { type: "arrow"; id: string; start: Vec }
   | { type: "erase"; hit: boolean };
@@ -176,7 +177,12 @@ function newNote(at: Vec): Note {
 
 /* Scale a note from one of its corners: the type grows with the drag and the
    opposite corner stays where it is.                                   */
-function scaleNote(n: Note, corner: string, r0: Rect, size0: number, dx: number, dy: number): Note {
+function scaleNote(n: Note, corner: string, r0: Rect, size0: number, dx: number, dy: number, width0?: number): Note {
+  // a side grip sets the width: the words wrap and the size stays as it is
+  if (corner === "e" || corner === "w") {
+    const w = Math.round(Math.max(n.size * 1.5, r0.w + (corner === "e" ? dx : -dx)));
+    return { ...n, width: w, x: corner === "w" ? r0.x + r0.w - w : r0.x };
+  }
   const sx = (r0.w + (corner.includes("e") ? dx : -dx)) / r0.w;
   const sy = (r0.h + (corner.includes("s") ? dy : -dy)) / r0.h;
   const k = Math.max(sx, sy);
@@ -185,6 +191,8 @@ function scaleNote(n: Note, corner: string, r0: Rect, size0: number, dx: number,
   return {
     ...n,
     size,
+    // a wrapped note grows with its text, so it wraps the same way at the new size
+    width: width0 ? Math.round(width0 * f) : n.width,
     x: corner.includes("w") ? r0.x + r0.w - r0.w * f : r0.x,
     y: corner.includes("n") ? r0.y + r0.h - r0.h * f : r0.y,
   };
@@ -466,6 +474,7 @@ export function Board() {
         corner: noteGrip.dataset.corner ?? "se",
         r0: markRect(n),
         size0: n.size,
+        width0: n.width,
         start: world,
         moved: false,
       };
@@ -680,7 +689,7 @@ export function Board() {
           live((d) => ({
             ...d,
             marks: d.marks.map((m) =>
-              m.id === g.id && m.kind === "text" ? scaleNote(m, g.corner, g.r0, g.size0, w[0] - g.start[0], w[1] - g.start[1]) : m,
+              m.id === g.id && m.kind === "text" ? scaleNote(m, g.corner, g.r0, g.size0, w[0] - g.start[0], w[1] - g.start[1], g.width0) : m,
             ),
           }));
           break;
@@ -1281,6 +1290,13 @@ export function Board() {
           onPointerDown={onPointerDown}
           onDoubleClick={(e) => {
             if (getState().tool !== "select") return;
+            // a side grip, double-clicked: the note goes back to the width of its text
+            const side = (e.target as HTMLElement).closest<HTMLElement>("[data-note-resize]");
+            if (side && (side.dataset.corner === "e" || side.dataset.corner === "w")) {
+              const id = side.dataset.noteResize!;
+              commit((d) => ({ ...d, marks: d.marks.map((m) => (m.id === id && m.kind === "text" ? { ...m, width: undefined } : m)) }));
+              return;
+            }
             // a note: write in it again
             const noteId = (e.target as HTMLElement).closest<HTMLElement>("[data-mark]")?.dataset.mark;
             if (noteId && getState().doc.marks.some((m) => m.id === noteId && m.kind === "text")) {

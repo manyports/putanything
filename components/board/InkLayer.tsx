@@ -155,6 +155,8 @@ function noteStyle(n: Note): React.CSSProperties {
     textAlign: n.align ?? "left",
     letterSpacing: n.font === "sans" && n.size >= 36 ? "-0.03em" : undefined,
     color: toneColor(n.tone),
+    // a set width wraps the words inside it; otherwise each line runs as long as it is
+    ...(n.width ? { width: n.width, whiteSpace: "pre-wrap", overflowWrap: "anywhere" } : { whiteSpace: "pre" }),
   };
 }
 
@@ -227,10 +229,10 @@ function NoteEditor({ note }: { note: Note }) {
       }}
       placeholder="write it down"
       spellCheck={false}
-      className="absolute resize-none overflow-hidden whitespace-pre bg-transparent p-0 outline-none placeholder:text-ink-ghost"
+      className="absolute resize-none overflow-hidden bg-transparent p-0 outline-none placeholder:text-ink-ghost"
       style={{
         ...noteStyle(note),
-        width: Math.max(draft ? 0 : 140, box.w + note.size * 0.6),
+        width: note.width ?? Math.max(draft ? 0 : 140, box.w + note.size * 0.6),
         height: box.h + 2,
       }}
     />
@@ -357,7 +359,7 @@ export const InkLayer = memo(function InkLayer({ marks, selection, interactive, 
             key={n.id}
             data-mark={n.id}
             title={interactive ? "double-click to edit" : undefined}
-            className="absolute whitespace-pre select-none"
+            className="absolute select-none"
             style={{
               ...noteStyle(n),
               minWidth: measureNote(n).w,
@@ -384,7 +386,33 @@ export const InkLayer = memo(function InkLayer({ marks, selection, interactive, 
             ["sw", r.x - p, r.y + r.h + p, "nesw-resize"],
             ["se", r.x + r.w + p, r.y + r.h + p, "nwse-resize"],
           ];
-          return corners.map(([c, x, y, cursor]) => (
+          const sides = (["w", "e"] as const).map((c) => (
+            <div
+              key={c}
+              data-note-resize={selected[0].id}
+              data-corner={c}
+              title="drag to set the width; the words wrap"
+              className="absolute z-10 grid place-items-center"
+              style={{
+                left: (c === "w" ? r.x - p : r.x + r.w + p) - g,
+                top: r.y - p,
+                width: g * 2,
+                height: r.h + p * 2,
+                cursor: "ew-resize",
+              }}
+            >
+              <span
+                className="block"
+                style={{
+                  width: 5 / zoom,
+                  height: Math.min(28 / zoom, r.h * 0.6),
+                  background: "var(--panel-face)",
+                  boxShadow: `0 0 0 ${1.5 / zoom}px var(--selection)`,
+                }}
+              />
+            </div>
+          ));
+          return [...sides, ...corners.map(([c, x, y, cursor]) => (
             <div
               key={c}
               data-note-resize={selected[0].id}
@@ -402,7 +430,7 @@ export const InkLayer = memo(function InkLayer({ marks, selection, interactive, 
                 }}
               />
             </div>
-          ));
+          ))];
         })()}
       {selected.length === 1 &&
         selected[0].kind === "shape" &&

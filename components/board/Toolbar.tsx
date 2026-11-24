@@ -343,6 +343,24 @@ function TextStrip() {
           }
           items={aligns.map((a) => ({ key: a.key, ariaLabel: `align ${a.key}`, tooltip: `align ${a.key}`, label: a.icon }))}
         />
+        {/* lit while a note is as wide as its text; press it to undo a width set with the side grips */}
+        <Segmented
+          ariaLabel="width"
+          value={notes.some((n) => n.width) ? null : "fit"}
+          onChange={() => {
+            if (!notes.length) return;
+            const ids = new Set(notes.map((n) => n.id));
+            commit((d) => ({ ...d, marks: d.marks.map((m) => (ids.has(m.id) && m.kind === "text" ? { ...m, width: undefined } : m)) }));
+          }}
+          items={[
+            {
+              key: "fit",
+              ariaLabel: "width fits the text",
+              tooltip: notes.some((n) => n.width) ? "fit the width to the text" : "width fits the text · drag a side to wrap",
+              label: "fit",
+            },
+          ]}
+        />
       </div>
     </div>
   );

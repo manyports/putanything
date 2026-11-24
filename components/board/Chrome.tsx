@@ -489,6 +489,7 @@ export function HelpSheet({ open, onClose }: { open: boolean; onClose: () => voi
         [["a"], "arrow, shift snaps the angle"],
         [["t"], "note, or double-click the board"],
         [["↵"], "edit the selected note (or double-click it)"],
+        [["drag", "side"], "set a note's width; its words wrap"],
         [["r"], "shapes; shift for a square or circle"],
         [["e"], "eraser"],
         [["x"], "graphite or violet"],
